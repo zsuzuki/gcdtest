@@ -31,11 +31,12 @@ class Group {
   dispatch_queue_t queue;
 
 public:
-  Group() : group(dispatch_group_create()) {}
-  ~Group() { dispatch_release(group); }
-
-  void init(const char *label) {
-    queue = dispatch_queue_create(label, DISPATCH_QUEUE_CONCURRENT);
+  Group(const char *label)
+      : group(dispatch_group_create()),
+        queue(dispatch_queue_create(label, DISPATCH_QUEUE_CONCURRENT)) {}
+  ~Group() {
+    dispatch_release(queue);
+    dispatch_release(group);
   }
 
   void async(auto func) {
@@ -58,8 +59,7 @@ int main() {
   Print("Hello, C++20!");
 
   Semaphore sem{5};
-  Group group;
-  group.init("com.example.myqueue");
+  Group group{"com.example.gcdtest"};
 
   for (int i = 0; i < 10; ++i) {
     group.async([i, &sem]() {
