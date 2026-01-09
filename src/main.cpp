@@ -9,16 +9,6 @@
 namespace {
 
 //
-template <class... Args>
-void Print(std::format_string<Args...> format, Args... args) {
-  static dispatch_semaphore_t sem = dispatch_semaphore_create(1);
-  std::string str = std::format(format, std::forward<Args>(args)...);
-  dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
-  std::cout << "\x1b[33m" << str << "\x1b[0m\n";
-  dispatch_semaphore_signal(sem);
-}
-
-//
 class Semaphore {
   dispatch_semaphore_t sem;
 
@@ -29,6 +19,16 @@ public:
   void lock() { dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER); }
   void unlock() { dispatch_semaphore_signal(sem); }
 };
+
+//
+template <class... Args>
+void Print(std::format_string<Args...> format, Args... args) {
+  static Semaphore sem;
+  std::string str = std::format(format, std::forward<Args>(args)...);
+  sem.lock();
+  std::cout << "\x1b[33m" << str << "\x1b[0m\n";
+  sem.unlock();
+}
 
 //
 class Group {
