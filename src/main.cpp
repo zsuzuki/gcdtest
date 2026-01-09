@@ -6,11 +6,16 @@
 #include <iostream>
 #include <unistd.h>
 
+namespace {
+
 //
 template <class... Args>
 void Print(std::format_string<Args...> format, Args... args) {
-  std::cout << "\x1b[33m" << std::format(format, std::forward<Args>(args)...)
-            << "\x1b[0m\n";
+  static dispatch_semaphore_t sem = dispatch_semaphore_create(1);
+  std::string str = std::format(format, std::forward<Args>(args)...);
+  dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+  std::cout << "\x1b[33m" << str << "\x1b[0m\n";
+  dispatch_semaphore_signal(sem);
 }
 
 //
@@ -55,11 +60,58 @@ public:
 };
 
 //
+class Timer {
+  dispatch_source_t timer;
+  dispatch_semaphore_t sem;
+
+public:
+  Timer(const char *label, auto func) : sem(dispatch_semaphore_create(0)) {
+    auto queue = dispatch_queue_create(label, 0);
+    timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+
+    dispatch_source_set_cancel_handler(timer, ^{
+      dispatch_semaphore_signal(sem);
+      Print("Cancel");
+    });
+
+    dispatch_source_set_event_handler(timer, ^{
+      if (func()) {
+        cancel();
+      }
+    });
+  }
+  ~Timer() {
+    wait();
+    dispatch_release(timer);
+    dispatch_release(sem);
+  }
+
+  void start(uint64_t interval_ms) {
+    dispatch_source_set_timer(timer, DISPATCH_TIME_NOW,
+                              interval_ms * NSEC_PER_MSEC, 0);
+    dispatch_resume(timer);
+  }
+
+  void cancel() { dispatch_source_cancel(timer); }
+  void wait() { dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER); }
+};
+
+} // namespace
+
+//
 int main() {
   Print("Hello, C++20!");
 
   Semaphore sem{5};
   Group group{"com.example.gcdtest"};
+
+  std::atomic_int counter{0};
+  Timer timer{"com.example.gcdtest.timer", [&]() {
+                counter++;
+                Print("Counter: {}", counter.load());
+                return counter.load() >= 7;
+              }};
+  timer.start(1000);
 
   for (int i = 0; i < 10; ++i) {
     group.async([i, &sem]() {
