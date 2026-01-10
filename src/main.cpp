@@ -71,7 +71,6 @@ public:
 
     dispatch_source_set_cancel_handler(timer, ^{
       dispatch_semaphore_signal(sem);
-      Print("Cancel");
     });
 
     dispatch_source_set_event_handler(timer, ^{
@@ -81,6 +80,7 @@ public:
     });
   }
   ~Timer() {
+    cancel();
     wait();
     dispatch_release(timer);
     dispatch_release(sem);
